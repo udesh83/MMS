@@ -500,11 +500,16 @@ view_mode = st.radio(
     horizontal=True
 )
 
+# =====================================================
+# CARD VIEW
+# =====================================================
+
 if view_mode == "Card View":
 
     for index, row in display_df.iterrows():
 
         with st.container():
+
             col1, col2 = st.columns([4, 1])
 
             with col1:
@@ -513,16 +518,43 @@ if view_mode == "Card View":
                 st.write(f"**S/N:** {row.get('Serial No', '')}")
 
             with col2:
-                st.selectbox(
+
+                current_status = (
+                    str(row["Status"])
+                    if pd.notna(row.get("Status"))
+                    else ""
+                )
+
+                new_status = st.selectbox(
                     "Status",
                     status_options,
-                    index=status_options.index(
-                        row.get("Status", "")
-                    ) if row.get("Status", "") in status_options else 0,
+                    index=status_options.index(current_status)
+                    if current_status in status_options
+                    else 0,
                     key=f"status_{index}"
                 )
 
+                # AUTO SAVE WHEN STATUS CHANGES
+                if new_status != current_status:
+
+                    df.loc[index, "Status"] = new_status
+
+                    df.to_excel(
+                        LATEST_FILE,
+                        index=False
+                    )
+
+                    load_data.clear()
+
+                    st.toast("✅ Status updated")
+
+                    st.rerun()
+
         st.divider()
+
+# =====================================================
+# TABLE VIEW
+# =====================================================
 
 else:
 
@@ -534,24 +566,35 @@ else:
                 options=status_options
             )
         },
-        use_container_width=True
+        use_container_width=True,
+        hide_index=False,
+        key="inventory_editor"
     )
 
-# =====================================================
-# DOWNLOAD CSV
-# =====================================================
+    # Initialize tracking
+    if "last_table_data" not in st.session_state:
+        st.session_state.last_table_data = display_df.copy()
 
-csv = display_df.to_csv(
-    index=False
-).encode("utf-8")
+    # AUTO SAVE WHEN ANY STATUS IS CHANGED
+    if not edited_df.equals(st.session_state.last_table_data):
 
-st.download_button(
-    "⬇ Download CSV",
-    csv,
-    "inventory_filtered.csv",
-    "text/csv"
-)
+        updated_df = df.copy()
 
+        for idx in edited_df.index:
+            updated_df.loc[idx, "Status"] = edited_df.loc[idx, "Status"]
+
+        updated_df.to_excel(
+            LATEST_FILE,
+            index=False
+        )
+
+        st.session_state.last_table_data = edited_df.copy()
+
+        load_data.clear()
+
+        st.toast("✅ Changes saved automatically")
+
+        st.rerun()
 # =====================================================
 # DOWNLOAD EXCEL
 # =====================================================
