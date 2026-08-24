@@ -20,16 +20,19 @@ st.set_page_config(
 
 LATEST_FILE = "latest_inventory.xlsx"
 
-USERS = {
-    "admin": {
-        "password": "admin123",
-        "role": "admin"
-    },
-    "spadmin": {
-        "password": "spadmin123",
-        "role": "spadmin"
+USERS_FILE = "users.xlsx"
+
+users_df = pd.read_excel(USERS_FILE)
+
+USERS = {}
+
+for _, row in users_df.iterrows():
+
+    USERS[str(row["Username"]).strip()] = {
+        "password": str(row["Password"]).strip(),
+        "role": str(row["Role"]).strip(),
+        "sloc": str(row["SLOC"]).strip()
     }
-}
 
 # =====================================================
 # SESSION STATE
@@ -43,6 +46,9 @@ if "username" not in st.session_state:
 
 if "role" not in st.session_state:
     st.session_state.role = ""
+
+if "sloc" not in st.session_state:
+    st.session_state.sloc = ""
 
 # =====================================================
 # LOGIN PAGE
@@ -91,7 +97,7 @@ def login_page():
                 st.session_state.logged_in = True
                 st.session_state.username = username
                 st.session_state.role = USERS[username]["role"]
-
+                st.session_state.sloc = USERS[username]["sloc"]
                 st.rerun()
 
             else:
@@ -124,7 +130,7 @@ with header_left:
 # FILE UPLOAD
 # =====================================================
 
-if st.session_state.role == "spadmin":
+if st.session_state.role in ["admin", "spadmin"]:
 
     uploaded_file = st.file_uploader(
         "Upload Weekly Inventory File",
@@ -208,12 +214,25 @@ def load_data():
 
 df = load_data()
 
+# Filter only for normal users
+if st.session_state.role == "user":
+
+    df = df[
+        df["Sloc Des"].astype(str).str.strip()
+        == st.session_state.sloc
+
+    ]
+
 # =====================================================
 # SIDEBAR USER PANEL
 # =====================================================
 
 st.sidebar.markdown(
     f"**👤 Logged as: {st.session_state.username}**"
+)
+
+st.sidebar.write(
+    f"📍 SLOC: {st.session_state.sloc}"
 )
 
 if st.sidebar.button(
@@ -248,11 +267,18 @@ slocs = sorted(
     [x for x in region_df["Sloc Des"].unique() if x]
 )
 
-selected_slocs = st.sidebar.multiselect(
-    "Location (SLOC)",
-    slocs,
-    default=slocs
-)
+if st.session_state.role == "admin":
+
+    selected_slocs = st.sidebar.multiselect(
+        "Location (SLOC)",
+        slocs,
+        default=slocs
+    )
+
+else:
+
+    selected_slocs = [st.session_state.sloc]
+
 
 sloc_df = region_df[
     region_df["Sloc Des"].isin(selected_slocs)
@@ -318,42 +344,38 @@ k4.metric(
     pending_updates
 )
 
-st.divider()
+if st.session_state.role in ["admin", "spadmin"]:
 
-# =====================================================
-# CHARTS
-# =====================================================
+    c1, c2 = st.columns(2)
 
-c1, c2 = st.columns(2)
+    with c1:
+        # Asset by Region chart
+        region_chart = (
+            filtered_df.groupby("Region")
+            .size()
+            .reset_index(name="Assets")
+        )
 
-with c1:
+        fig_region = px.bar(
+            region_chart,
+            x="Region",
+            y="Assets",
+            color="Assets",
+            title="Assets by Region"
+        )
 
-    region_chart = (
-        filtered_df.groupby("Region")
-        .size()
-        .reset_index(name="Assets")
-    )
+        st.plotly_chart(
+            fig_region,
+            use_container_width=True
+        )
 
-    fig_region = px.bar(
-        region_chart,
-        x="Region",
-        y="Assets",
-        color="Assets",
-        title="Assets by Region"
-    )
-
-    st.plotly_chart(
-        fig_region,
-        use_container_width=True
-    )
-
-with c2:
-
-    cat_chart = (
-        filtered_df.groupby("SUB")
-        .size()
-        .reset_index(name="Assets")
-    )
+    with c2:
+        # Asset by Category chart
+        cat_chart = (
+            filtered_df.groupby("SUB")
+            .size()
+            .reset_index(name="Assets")
+        )
 
     fig_cat = px.pie(
         cat_chart,
@@ -367,52 +389,34 @@ with c2:
         use_container_width=True
     )
 
-# =====================================================
-# TOP 20 LOCATIONS
-# =====================================================
+    st.subheader("Top 20 Locations")
 
-st.subheader("Top 20 Locations")
-
-location_summary = (
-    filtered_df.groupby("Sloc Des")
-    .size()
-    .reset_index(name="Assets")
-    .sort_values(
-        by="Assets",
-        ascending=False
+    location_summary = (
+        filtered_df.groupby("Sloc Des")
+        .size()
+        .reset_index(name="Assets")
+        .sort_values(by="Assets", ascending=False)
+        .head(20)
     )
-    .head(20)
-)
 
-chart_data = location_summary.sort_values(
-    by="Assets",
-    ascending=True
-)
+    chart_data = location_summary.sort_values(
+        by="Assets",
+        ascending=True
+    )
 
-fig_location = px.bar(
-    chart_data,
-    x="Assets",
-    y="Sloc Des",
-    orientation="h",
-    text="Assets",
-    title="Top 20 Locations by Asset Count"
-)
+    fig_location = px.bar(
+        chart_data,
+        x="Assets",
+        y="Sloc Des",
+        orientation="h",
+        text="Assets",
+        title="Top 20 Locations by Asset Count"
+    )
 
-fig_location.update_traces(
-    textposition="outside"
-)
-
-fig_location.update_layout(
-    height=700,
-    showlegend=False,
-    xaxis_title="Asset Count",
-    yaxis_title="Location"
-)
-
-st.plotly_chart(
-    fig_location,
-    use_container_width=True
-)
+    st.plotly_chart(
+        fig_location,
+        use_container_width=True
+    )
 
 # =====================================================
 # SEARCH
