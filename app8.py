@@ -344,42 +344,38 @@ k4.metric(
     pending_updates
 )
 
-st.divider()
+if st.session_state.role in ["admin", "spadmin"]:
 
-# =====================================================
-# CHARTS
-# =====================================================
+    c1, c2 = st.columns(2)
 
-c1, c2 = st.columns(2)
+    with c1:
+        # Asset by Region chart
+        region_chart = (
+            filtered_df.groupby("Region")
+            .size()
+            .reset_index(name="Assets")
+        )
 
-with c1:
+        fig_region = px.bar(
+            region_chart,
+            x="Region",
+            y="Assets",
+            color="Assets",
+            title="Assets by Region"
+        )
 
-    region_chart = (
-        filtered_df.groupby("Region")
-        .size()
-        .reset_index(name="Assets")
-    )
+        st.plotly_chart(
+            fig_region,
+            use_container_width=True
+        )
 
-    fig_region = px.bar(
-        region_chart,
-        x="Region",
-        y="Assets",
-        color="Assets",
-        title="Assets by Region"
-    )
-
-    st.plotly_chart(
-        fig_region,
-        use_container_width=True
-    )
-
-with c2:
-
-    cat_chart = (
-        filtered_df.groupby("SUB")
-        .size()
-        .reset_index(name="Assets")
-    )
+    with c2:
+        # Asset by Category chart
+        cat_chart = (
+            filtered_df.groupby("SUB")
+            .size()
+            .reset_index(name="Assets")
+        )
 
     fig_cat = px.pie(
         cat_chart,
@@ -393,52 +389,34 @@ with c2:
         use_container_width=True
     )
 
-# =====================================================
-# TOP 20 LOCATIONS
-# =====================================================
+    st.subheader("Top 20 Locations")
 
-st.subheader("Top 20 Locations")
-
-location_summary = (
-    filtered_df.groupby("Sloc Des")
-    .size()
-    .reset_index(name="Assets")
-    .sort_values(
-        by="Assets",
-        ascending=False
+    location_summary = (
+        filtered_df.groupby("Sloc Des")
+        .size()
+        .reset_index(name="Assets")
+        .sort_values(by="Assets", ascending=False)
+        .head(20)
     )
-    .head(20)
-)
 
-chart_data = location_summary.sort_values(
-    by="Assets",
-    ascending=True
-)
+    chart_data = location_summary.sort_values(
+        by="Assets",
+        ascending=True
+    )
 
-fig_location = px.bar(
-    chart_data,
-    x="Assets",
-    y="Sloc Des",
-    orientation="h",
-    text="Assets",
-    title="Top 20 Locations by Asset Count"
-)
+    fig_location = px.bar(
+        chart_data,
+        x="Assets",
+        y="Sloc Des",
+        orientation="h",
+        text="Assets",
+        title="Top 20 Locations by Asset Count"
+    )
 
-fig_location.update_traces(
-    textposition="outside"
-)
-
-fig_location.update_layout(
-    height=700,
-    showlegend=False,
-    xaxis_title="Asset Count",
-    yaxis_title="Location"
-)
-
-st.plotly_chart(
-    fig_location,
-    use_container_width=True
-)
+    st.plotly_chart(
+        fig_location,
+        use_container_width=True
+    )
 
 # =====================================================
 # SEARCH
