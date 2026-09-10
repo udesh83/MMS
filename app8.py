@@ -162,7 +162,7 @@ if not os.path.exists(LATEST_FILE):
 # =====================================================
 
 
-@st.cache_data(ttl=10)
+@st.cache_data
 def load_data():
 
     df = pd.read_excel(LATEST_FILE)
@@ -207,6 +207,14 @@ def load_data():
 
 
 df = load_data()
+
+# =====================================================
+# FILTERS
+# =====================================================
+
+# =====================================================
+# SIDEBAR
+# =====================================================
 
 # =====================================================
 # SIDEBAR USER PANEL
@@ -473,11 +481,16 @@ if search_text:
     ]
 
 # =====================================================
+# DATA TABLE
+# =====================================================
+
+# =====================================================
 # INVENTORY RECORDS
 # =====================================================
 
 st.subheader("Inventory Records")
 
+# Predefined Status List
 status_options = [
     "",
     "Installed",
@@ -486,107 +499,66 @@ status_options = [
     "Maintenance"
 ]
 
-view_mode = st.radio(
-    "View Mode",
-    ["Card View", "Table View"],
-    horizontal=True
+# Ensure Status column exists
+if "Status" not in display_df.columns:
+    display_df["Status"] = "Pending Update"
+
+# Editable Grid
+edited_df = st.data_editor(
+    display_df,
+    use_container_width=True,
+    height=600,
+    column_config={
+        "Status": st.column_config.SelectboxColumn(
+            "Status",
+            help="Select asset status",
+            options=status_options,
+            required=True,
+        )
+    },
+    disabled=[
+        col for col in display_df.columns
+        if col != "Status"
+    ],
+    key="inventory_editor"
 )
 
-# =====================================================
-# CARD VIEW
-# =====================================================
-
-if view_mode == "Card View":
-
-    for index, row in display_df.iterrows():
-
-        with st.container():
-
-            col1, col2 = st.columns([4, 1])
-
-            with col1:
-                st.write(f"**Description:** {row.get('Mat Des', '')}")
-                st.write(f"**Material:** {row.get('Material Code', '')}")
-                st.write(f"**S/N:** {row.get('Serial No', '')}")
-
-            with col2:
-
-                current_status = (
-                    str(row["Status"])
-                    if pd.notna(row.get("Status"))
-                    else ""
-                )
-
-                new_status = st.selectbox(
-                    "Status",
-                    status_options,
-                    index=status_options.index(current_status)
-                    if current_status in status_options
-                    else 0,
-                    key=f"status_{index}"
-                )
-
-                # AUTO SAVE WHEN STATUS CHANGES
-                if new_status != current_status:
-
-                    df.loc[index, "Status"] = new_status
-
-                    df.to_excel(
-                        LATEST_FILE,
-                        index=False
-                    )
-
-                    load_data.clear()
-
-                    st.toast("✅ Status updated")
-
-                    st.rerun()
-
-        st.divider()
-
-# =====================================================
-# TABLE VIEW
-# =====================================================
-
-else:
-
-    edited_df = st.data_editor(
-        display_df,
-        column_config={
-            "Status": st.column_config.SelectboxColumn(
-                "Status",
-                options=status_options
-            )
-        },
-        use_container_width=True,
-        hide_index=False,
-        key="inventory_editor"
-    )
-
-    # Initialize tracking
-    if "last_table_data" not in st.session_state:
-        st.session_state.last_table_data = display_df.copy()
-
-    # AUTO SAVE WHEN ANY STATUS IS CHANGED
-    if not edited_df.equals(st.session_state.last_table_data):
-
-        updated_df = df.copy()
-
-        for idx in edited_df.index:
-            updated_df.loc[idx, "Status"] = edited_df.loc[idx, "Status"]
-
-        updated_df.to_excel(
+# Save Button
+if st.button(
+    "💾 Save ",
+    use_container_width=True
+):
+    try:
+        edited_df.to_excel(
             LATEST_FILE,
             index=False
         )
-
-        st.session_state.last_table_data = edited_df.copy()
-
-        load_data.clear()
-
-        st.toast("✅ Changes saved automatically")
-
+        st.success(
+            "Status changes saved successfully."
+        )
+        st.cache_data.clear()
         st.rerun()
+
+    except Exception as e:
+        st.error(
+            f"Error saving changes: {e}"
+        )
+
+# =====================================================
+# DOWNLOAD CSV
+# =====================================================
+
+csv = display_df.to_csv(
+    index=False
+).encode("utf-8")
+
+st.download_button(
+    "⬇ Download CSV",
+    csv,
+    "inventory_filtered.csv",
+    "text/csv"
+)
+
 # =====================================================
 # DOWNLOAD EXCEL
 # =====================================================
